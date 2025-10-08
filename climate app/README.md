@@ -1,7 +1,5 @@
 Anthony Daher 300233710
 
-Test status: [![tests](https://github.com/Dxher/climate_app_SED1115/actions/workflows/tests.yml/badge.svg)](https://github.com/Dxher/climate_app_SED1115/actions/workflows/tests.yml)
-
 Climate_app.py is a software that allows you to visualize climate data extracted from Environment Canada. The CSV must contain a year's worth of climate data (daily data) and not those displaying monthly data.
 
 Climate_app.py allows you to compare two separate days within the year.
