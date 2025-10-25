@@ -7,14 +7,12 @@ sw2 = Pin(11, Pin.IN, Pin.PULL_DOWN)
 #I2C for DS3231
 i2c = I2C(1, sda=Pin(14), scl=Pin(15))
 
-# BCD to decimal conversion
-def bcd_to_dec(b):  
-    # Upper 4 bits (dizaine) and lower 4 bits (unite) making the seconds value
-    return (b >> 4) * 10 + (b & 0x0F)
-
 def read_seconds():
     # [0] removes bytes object, &0x7F to ignore the CH bit
-    return bcd_to_dec(i2c.readfrom_mem(0x68, 0x00, 1)[0] & 0x7F)
+    binaryCount = i2c.readfrom_mem(0x68, 0x00, 1)[0] & 0x7F
+    # Upper 4 bits (dizaine) and lower 4 bits (unite) making the seconds value
+    decimalCount = (binaryCount >> 4) * 10 + (binaryCount & 0x0F)
+    return decimalCount
 
 def wait_for_press(pin):
     # not pressed
