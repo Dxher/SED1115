@@ -1,17 +1,21 @@
-import json, time
+import time
 from machine import Pin, PWM, I2C
 from ads1x15 import ADS1015
 
-
-# X Config
-OUT_PATH = "/calibration_data_JIG123.txt"
-
 # Constants
-ServoFreq = 50 # Hz
+ServoFreq = 50  # Hz
+
+# Converting voltage to actual angle - These will be updated when the code first runs
+# Voltage at 0 degrees
+shoulder_min_volts = 0.0
+elbow_min_volts = 0.0
+# Voltage at 180 degrees
+shoulder_max_volts = 2.5
+elbow_max_volts = 2.5
 
 # Sweep settings
-STEP_DEG   = 5      # angle step for sweep
-NSAMPLES   = 6      # samples per point
+STEP_DEG = 10 # Angle degree step (10-degree increments)
+SAMPLES = 6 # Amount of iterations to get average angles
 
 # Servos
 pwm_shoulder = PWM(Pin(0))
@@ -47,103 +51,156 @@ def read_feedback_volts():
     raw1 = adc.read(rate=4, channel1=1)  # AIN1 = elbow
     return adc.raw_to_v(raw0), adc.raw_to_v(raw1)
 
-def average(samples):
-    # Return the average of a group of data
-    return sum(samples) / len(samples) if samples else 0.0
-
-def volts_to_angle(volts):
-    """Convert feedback volts to actual angle (linear model per channel)."""
-    v0   = 0.51
-    v180 = 2.79
-    if abs(v180 - v0) < 1e-6:
-        return 0.0  # avoid div-by-zero; update CAL!
-    slope = 180.0 / (v180 - v0)
-    return max(0.0, min(180.0, slope * (volts - v0)))
-
-# --------------- Sweep & record ----------------
-def sweep_joint(joint_name, pwm_this, pwm_other, AIN):
+def voltage_to_angle(voltage, v_min, v_max):
     """
-    Sweep desired angle 0..180 and record (desired, actual_from_volts, error).
-    AIN: 0 for AIN0 (shoulder), 1 for AIN1 (elbow)
+    Convert feedback voltage to actual angle (0-180 degrees)
+    *The calculation was retrieved from GPT*
+    **Assumes linear relationship between voltage and angle**
     """
-    print("\n[Calibrate] Sweeping", joint_name)
-    # Park the other joint at neutral
-    set_servo_deg(pwm_other, 90)
-    time.sleep_ms(400)
+    if v_max - v_min == 0:
+        raise Exception("Invalid voltage range (v_max == v_min)")
+    else:
+        angle = (voltage - v_min) / (v_max - v_min) * 180.0
+        # Clamp to valid range
+        return max(0.0, min(180.0, angle))
 
-    rows = []  # list of dicts per angle
+def read_actual_angles():
+    """
+    Read feedback voltages and convert to actual angles
+    Returns (shoulder_angle, elbow_angle) in degrees
+    """
+    v_shoulder, v_elbow = read_feedback_volts()
+    
+    angle_shoulder = voltage_to_angle(v_shoulder, shoulder_min_volts, shoulder_max_volts)
+    angle_elbow = voltage_to_angle(v_elbow, elbow_min_volts, elbow_max_volts)
+    
+    return angle_shoulder, angle_elbow
 
-    for desired in range(0, 181, STEP_DEG):
-        set_servo_deg(pwm_this, desired)
-        time.sleep_ms(60)
+def read_averaged_angles():
+    """
+    Read multiple SAMPLES and return averaged actual angles
+    """
+    shoulder_sum = 0.0
+    elbow_sum = 0.0
+    
+    for _ in range(SAMPLES):
+        s_angle, e_angle = read_actual_angles()
+        shoulder_sum += s_angle
+        elbow_sum += e_angle
+        time.sleep_ms(50)  # Small delay between samples
+    
+    shoulder_angle = shoulder_sum / SAMPLES
+    elbow_angle = elbow_sum / SAMPLES
 
-        # average N samples from selected channel
-        samples = []
-        for _ in range(NSAMPLES):
-            v0, v1 = read_feedback_volts()
-            samples.append(v0 if AIN == 0 else v1)
-            time.sleep_ms(10)
-        mean_v = average(samples)
+    return shoulder_angle, elbow_angle 
 
-        actual = volts_to_angle(mean_v)
-        error  = actual - desired
+def calibrate_servo(servo_name, pwm):
+    """
+    Calibrate a single servo across its range
+    Returns list of desired_angle, actual_angle and error
+    """
+    print(f"\nCalibrating {servo_name} servo...")
+    print("Desired\tActual\tError")
+    
+    results = []
+    
+    for desired_angle in range(0, 181, STEP_DEG):
+        # Set the servo to desired angle
+        set_servo_deg(pwm, desired_angle)
+        
+        # Wait for servo to reach position
+        time.sleep_ms(100)
+        
+        # Read the actual angle (averaged)
+        if servo_name == "shoulder":
+            actual_angle, _ = read_averaged_angles()
+        else:  # elbow
+            _, actual_angle = read_averaged_angles()
+        
+        # Calculate error (actual - desired)
+        error = actual_angle - desired_angle
+        
+        # Create list containing all pertinent data
+        results.append((desired_angle, actual_angle, error))
+        print(desired_angle, actual_angle, error)
+    
+    return results
 
-        rows.append({
-            "desired_deg": desired,
-            "actual_deg":  round(actual, 3),
-            "error_deg":   round(error, 3),
-            "mean_volts":  round(mean_v, 5),
-        })
-        print("%s: %3ddeg -> %.3f V -> actual %.2f deg  error %+6.2f deg"
-            % (joint_name[0].upper(), desired, mean_v, actual, error))
+def save_calibration_data(jig_id, shoulder_data, elbow_data):
+    """
+    Save calibration data to a text file
+    """
+    filename = f"calibration_data_{jig_id}.txt"
+    
+    with open(filename, 'w') as f:
+        f.write(f"# Calibration data for test jig_{jig_id}\n")
+        f.write(f"# Format: desired_angle, actual_angle, error\n")
+        
+        f.write("[SHOULDER]\n")
+        for desired, actual, error in shoulder_data:
+            f.write(f"{desired},{actual:.2f},{error:.2f}\n")
+        
+        f.write("[ELBOW]\n")
+        for desired, actual, error in elbow_data:
+            f.write(f"{desired},{actual:.2f},{error:.2f}\n")
+    print("Saved as", filename)
 
-
-    return {
-        "name": joint_name,
-        "sweep_step_deg": STEP_DEG,
-        "samples_per_point": NSAMPLES,
-        "rows": rows
-    }
-
-def write_text_file(shoulder, elbow):
-    with open(OUT_PATH, "w") as f:
-        # Header
-        f.write("CALIBRATION DATA — Jig123\n")
-
-        def section(name, rows):
-            f.write("[%s]\n" % name)
-            f.write("[Calibrate] desired_deg  actual_deg  error_deg  mean_volts\n")
-            for r in rows:
-                d = r["desired_deg"]
-                a = r["actual_deg"]
-                e = r["error_deg"]
-                v = r["mean_volts"]
-                a_txt = "NA" if a is None else f"{a:.3f}"
-                e_txt = "NA" if e is None else f"{e:.3f}"
-                v_txt = "NA" if v is None else f"{v:.5f}"
-                f.write(f"{d:3d}  {a_txt:>7}  {e_txt:>7}  {v_txt}\n")
-            f.write("\n")
-
-        # pass the *row lists*, not the dicts
-        section("shoulder", shoulder["rows"])
-        section("elbow",    elbow["rows"])
-
-    print("\nSaved %s" % OUT_PATH)
-
-def main():
-    # Move to safe neutral
+def run_calibration():
+    """
+    Main calibration routine. This routine takes an input to get the jig_id, calibrates the min and max volts for each servo,
+    calibrate the shoulder, calibrates the elbow then saves the data into a file.
+    """
+    # Get the jig ID from user
+    jig_id = input("Enter your test jig ID (e.g., 1, 2, A, B): ").strip()
+    if not jig_id:
+        jig_id = "default"
+    
+    print(f"\nStarting calibration for test jig: {jig_id}")
+    
+    # First, update voltage constraints
+    print("\nStep 1: Determining voltage ranges...")
+    global shoulder_min_volts, shoulder_max_volts, elbow_min_volts, elbow_max_volts
+    
+    # Voltage at 0 degrees
+    set_servo_deg(pwm_shoulder, 0)
+    set_servo_deg(pwm_elbow, 0)
+    time.sleep(1)
+    shoulder_min_volts, elbow_min_volts = read_feedback_volts()
+    print(f"At 0°: Shoulder={shoulder_min_volts:.3f}V, Elbow={elbow_min_volts:.3f}V")
+   
+    # Voltage at 180 degrees
+    set_servo_deg(pwm_shoulder, 180)
+    set_servo_deg(pwm_elbow, 180)
+    time.sleep(1)
+    shoulder_max_volts, elbow_max_volts = read_feedback_volts()
+    print(f"At 180°: Shoulder={shoulder_max_volts:.3f}V, Elbow={elbow_max_volts:.3f}V")
+    
+    # Second, calibrate the shoulder
+    print("\nStep 2: Calibrating shoulder servo...")
+    # Return elbow to neutral position during shoulder calibration
+    set_servo_deg(pwm_elbow, 90)
+    time.sleep(0.5)
+    shoulder_data = calibrate_servo("shoulder", pwm_shoulder)
+    
+    # Third, calibrate the elbow
+    print("\nStep 3: Calibrating elbow servo...")
+    # Return shoulder to neutral position during elbow calibration
+    set_servo_deg(pwm_shoulder, 90)
+    time.sleep(0.5)
+    elbow_data = calibrate_servo("elbow", pwm_elbow)
+    
+    # Save the calibration data
+    save_calibration_data(jig_id, shoulder_data, elbow_data)
+    
+    # Return servos to neutral position
     set_servo_deg(pwm_shoulder, 90)
     set_servo_deg(pwm_elbow, 90)
-    time.sleep_ms(600)
+    
+    print("\nCalibration complete!")
 
-    # Test all angles for shoulder and elbow
-    shoulder = sweep_joint("shoulder", pwm_shoulder, pwm_elbow, AIN=0)
-    elbow    = sweep_joint("elbow", pwm_elbow, pwm_shoulder, AIN=1)
-
-    write_text_file(shoulder, elbow)
 
 if __name__ == "__main__":
     try:
-        main()
-    except KeyboardInterrupt:
-        pass
+        run_calibration()
+    except:
+        print("\nThe porgram has been forcefully stopped")
