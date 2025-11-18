@@ -48,12 +48,17 @@ def inverse_kinematics(Cx, Cy):
     Angle_YAC = math.acos((ShoulderY**2 + AC**2 - AbaseC**2) / (2 * ShoulderY * AC))
     alpha = math.degrees(Angle_YAC + Angle_BAC)
     beta = math.degrees(Angle_ACB + Angle_BAC)
-    
-    # Convert to servo angles
-    servoA = alpha - 75
-    servoB = 150 - beta
-    
-    return (servoA, servoB)
+    return alpha, beta
+
+def forward_kinematics(shoulder, elbow):
+    _shoulder = 180 - shoulder
+    # x1 = ShoulderX + La * math.cos(math.radians(_shoulder))
+    # y1 = ShoulderY + La * math.sin(math.radians(_shoulder))
+    x1 = La * math.cos(math.radians(_shoulder))
+    y1 = La * math.sin(math.radians(_shoulder))
+    x2 = x1 + Lb * math.cos(math.radians(_shoulder + elbow))
+    y2 = y1 + Lb * math.sin(math.radians(_shoulder + elbow))
+    return x1, y1, x2, y2
 
 def calibration_setup(jig_id):
     """
@@ -215,27 +220,23 @@ def draw_circle(center_x, center_y, radius, num_points=36, calibration_table=Non
         y = center_y + radius * math.sin(angle)
         move_to(x, y, calibration_table)
 
-def draw_square(center_x, center_y, size, calibration_table=None):
+def draw_square(calibration_table=None):
     """
     Draw a square
-    
-    Parameters:
-        center_x, center_y: Center of square in mm
-        size: Side length of square in mm
-    """    
-    half = size / 2
+    """ 
     
     # Define corners
     corners = [
-        (center_x - half, center_y - half),  # bottom-left
-        (center_x + half, center_y - half),  # bottom-right
-        (center_x + half, center_y + half),  # top-right
-        (center_x - half, center_y + half),  # top-left
-        (center_x - half, center_y - half),  # back to start
+        (20, 20),  # bottom-left
+        (50, 20),  # bottom-right
+        (50, 50),  # top-right
+        (20, 50),  # top-left
+        (20, 20),  # back to start
     ]
     
     for x, y in corners:
         move_to(x, y, calibration_table)
+        time.sleep(1)
 
 def compare_calibration(jig_id):
     """
@@ -247,42 +248,49 @@ def compare_calibration(jig_id):
     # Load calibration data
     calibration_table = calibration_setup(jig_id)
     
+    print(calibration_table)
     # Define test shape parameters
     # Position in the middle of the paper
-    center_x = 107  # middle of 214mm width
-    center_y = 139  # middle of 278mm height
     
     print("CALIBRATION COMPARISON TEST")
     
     # Test 1: Circle without calibration
     print("\n--- Drawing circle WITHOUT calibration ---")
-    input("Press Enter to start...")
+    input("Type anything to start...")
     draw_circle(70, 210, 30, num_points=36, calibration_table=None)
-    
-    time.sleep(1)
-    
+        
     # Test 2: Circle with calibration
     print("\n--- Drawing circle WITH calibration ---")
-    input("Press Enter to start...")
+    input("Type anything to start...")
     draw_circle(140, 210, 30, num_points=36, calibration_table=calibration_table)
-    
-    time.sleep(1)
-    
+        
     # Test 3: Square without calibration
     print("\n--- Drawing square WITHOUT calibration ---")
-    input("Press Enter to start...")
-    draw_square(70, 70, 30, calibration_table=None)
-    
-    time.sleep(1)
+    input("Type anything to start...")
+    draw_square()
     
     # Test 4: Square with calibration
     print("\n--- Drawing square WITH calibration ---")
-    input("Press Enter to start...")
-    draw_square(140, 70, 30, calibration_table=calibration_table)
+    input("Type anything to start...")
+    draw_square(calibration_table=calibration_table)
     
     print("Comparison test complete!")
 
 
 if __name__ == "__main__":    
     # Run comparison test for inputed jig_id
-    compare_calibration(input("Enter your test jig ID: ").strip())
+    calibration_table = calibration_setup(1)
+
+    angle_shoulder, angle_elbow = inverse_kinematics(148.6,81.5)
+    print(angle_shoulder, angle_elbow)
+    x, y, x2, y2 = forward_kinematics(angle_shoulder, angle_elbow)
+    print(x,y,x2,y2)
+
+    # move_to(1, 1, None)
+    # time.sleep(2)
+    # move_to(215, 1, None)
+    # time.sleep(2)
+    # move_to(215, 279, None)
+    # time.sleep(2)
+    # move_to(1, 279, None)
+    #compare_calibration(input("Enter your test jig ID: ").strip())

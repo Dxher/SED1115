@@ -103,13 +103,14 @@ def calibrate_servo(servo_name, pwm):
     print("Desired\tActual\tError")
     
     results = []
-    
+    set_servo_deg(pwm, 0)
+    time.sleep(1)
     for desired_angle in range(0, 181, STEP_DEG):
         # Set the servo to desired angle
         set_servo_deg(pwm, desired_angle)
         
         # Wait for servo to reach position
-        time.sleep_ms(100)
+        time.sleep_ms(200)
         
         # Read the actual angle (averaged)
         if servo_name == "shoulder":
@@ -150,13 +151,14 @@ def run_calibration():
     Main calibration routine. This routine takes an input to get the jig_id, calibrates the min and max volts for each servo,
     calibrate the shoulder, calibrates the elbow then saves the data into a file.
     """
+    """
     # Get the jig ID from user
     jig_id = input("Enter your test jig ID (e.g., 1, 2, A, B): ").strip()
     if not jig_id:
         jig_id = "default"
     
     print(f"\nStarting calibration for test jig: {jig_id}")
-    
+    """
     # First, update voltage constraints
     print("\nStep 1: Determining voltage ranges...")
     global shoulder_min_volts, shoulder_max_volts, elbow_min_volts, elbow_max_volts
@@ -170,23 +172,55 @@ def run_calibration():
    
     # Voltage at 180 degrees
     set_servo_deg(pwm_shoulder, 180)
+    time.sleep(1.5)
     set_servo_deg(pwm_elbow, 180)
     time.sleep(1)
     shoulder_max_volts, elbow_max_volts = read_feedback_volts()
     print(f"At 180°: Shoulder={shoulder_max_volts:.3f}V, Elbow={elbow_max_volts:.3f}V")
     
+    x1 = voltage_to_angle(2.7840002, shoulder_min_volts, shoulder_max_volts)
+    y1 = voltage_to_angle(2.456, elbow_min_volts, elbow_max_volts)
+    x2 = voltage_to_angle(1.4200001, shoulder_min_volts, shoulder_max_volts)
+    y2 = voltage_to_angle(0.92800004, elbow_min_volts, elbow_max_volts)
+    x3 = voltage_to_angle(0.614, shoulder_min_volts, shoulder_max_volts)
+    y3 = voltage_to_angle(0.94000008, elbow_min_volts, elbow_max_volts)
+    x4 = voltage_to_angle(0.744, shoulder_min_volts, shoulder_max_volts)
+    y4 = voltage_to_angle(2.4780002, elbow_min_volts, elbow_max_volts)
+    x5 = voltage_to_angle(1.746, shoulder_min_volts, shoulder_max_volts)
+    y5 = voltage_to_angle(2.456, elbow_min_volts, elbow_max_volts)
+    print(x1, y1)
+    set_servo_deg(pwm_shoulder, x1)
+    set_servo_deg(pwm_elbow, y1)
+    time.sleep(1.5)
+    set_servo_deg(pwm_shoulder, x2)
+    set_servo_deg(pwm_elbow, y2)
+    print(x2, y2)
+    time.sleep(1.5)
+    set_servo_deg(pwm_shoulder, x3)
+    set_servo_deg(pwm_elbow, y3)
+    print(x3, y3)
+    time.sleep(1.5)
+    set_servo_deg(pwm_shoulder, x4)
+    set_servo_deg(pwm_elbow, y4)
+    print(x4, y4)
+    time.sleep(1.5)
+    set_servo_deg(pwm_shoulder, x5)
+    set_servo_deg(pwm_elbow, y5)
+    print(x5, y5)
+    time.sleep(1.5)
+    """
     # Second, calibrate the shoulder
     print("\nStep 2: Calibrating shoulder servo...")
     # Return elbow to neutral position during shoulder calibration
     set_servo_deg(pwm_elbow, 90)
-    time.sleep(0.5)
+    time.sleep(1.5)
     shoulder_data = calibrate_servo("shoulder", pwm_shoulder)
     
     # Third, calibrate the elbow
     print("\nStep 3: Calibrating elbow servo...")
     # Return shoulder to neutral position during elbow calibration
     set_servo_deg(pwm_shoulder, 90)
-    time.sleep(0.5)
+    time.sleep(1)
     elbow_data = calibrate_servo("elbow", pwm_elbow)
     
     # Save the calibration data
@@ -197,10 +231,26 @@ def run_calibration():
     set_servo_deg(pwm_elbow, 90)
     
     print("\nCalibration complete!")
-
+"""
 
 if __name__ == "__main__":
     try:
         run_calibration()
+        #x1, y1 = read_feedback_volts()
+        #print(x1, y1)
+
+        # Voltage of each corner (x is shoulder servo, y is elbow servo)
+        # x1 = 2.7840002 y1 = 2.456       bottom left
+        # x2 = 1.4200001 y2 = 0.92800004  bottom right
+        # x3 = 0.614 y3 = 0.94000008      top right
+        # x4 = 0.744 y4 = 2.4780002       top left
+        # x5 = 1.746 y5 = 2.456           middle
+
+        # Angles of each corner and the middle
+        # 14.432075 36.929884    bottom left
+        # 105.567928 138.42067   bottom right
+        # 159.42093 137.62361    top right
+        # 150.73497 35.468628    top left
+        # 83.786192 36.929884    mid
     except:
         print("\nThe porgram has been forcefully stopped")
