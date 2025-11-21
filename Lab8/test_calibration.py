@@ -48,17 +48,12 @@ def inverse_kinematics(Cx, Cy):
     Angle_YAC = math.acos((ShoulderY**2 + AC**2 - AbaseC**2) / (2 * ShoulderY * AC))
     alpha = math.degrees(Angle_YAC + Angle_BAC)
     beta = math.degrees(Angle_ACB + Angle_BAC)
-    return alpha, beta
-
-def forward_kinematics(shoulder, elbow):
-    _shoulder = 180 - shoulder
-    # x1 = ShoulderX + La * math.cos(math.radians(_shoulder))
-    # y1 = ShoulderY + La * math.sin(math.radians(_shoulder))
-    x1 = La * math.cos(math.radians(_shoulder))
-    y1 = La * math.sin(math.radians(_shoulder))
-    x2 = x1 + Lb * math.cos(math.radians(_shoulder + elbow))
-    y2 = y1 + Lb * math.sin(math.radians(_shoulder + elbow))
-    return x1, y1, x2, y2
+    
+    # Convert to servo angles
+    servoA = alpha - 75
+    servoB = 150 - beta
+    
+    return servoA, servoB
 
 def calibration_setup(jig_id):
     """
@@ -103,7 +98,7 @@ def calibration_setup(jig_id):
                         error = float(parts[2])
                         calibration_table[current_servo].append((desired_angle, error))
         
-        # Ensure sort by desired angle
+        # Ensure sort by first element (desired_angle)
         calibration_table['shoulder'].sort(key=lambda x: x[0])
         calibration_table['elbow'].sort(key=lambda x: x[0])
         
@@ -119,13 +114,16 @@ def calibration_setup(jig_id):
 
 def interpolate_error(angle, error_table):
     """
-    Interpolate the error for a given angle using the error table
+    Interpolate the error for a given angle using the error table.
+    This uses linear interpolation between the two nearest calibration points.
+    The function was created by ChatGPT but was unused since we we couldn't get
+    passed inverse_kinematics issues.
     """
     # Handle edge cases
     if not error_table:
         return 0.0
     
-    # If angle is below the first calibration point
+    # If angle is below the first calibration pointSS
     if angle <= error_table[0][0]:
         return error_table[0][1]
     
@@ -153,144 +151,79 @@ def interpolate_error(angle, error_table):
     # Fallback (should not reach here)
     return 0.0
 
-def send_compensated_angle(calibration_table, shoulder_angle, elbow_angle):
+def send_angle(shoulder_angle, elbow_angle, calibration_table=None):
     """
-    Send compensated angles to the servos using the calibration table
+    Send angles to servos, if provided a calibration table, compensate for errors
     """
-    # Get interpolated errors for each servo
-    shoulder_error = interpolate_error(shoulder_angle, calibration_table['shoulder'])
-    elbow_error = interpolate_error(elbow_angle, calibration_table['elbow'])
-    
-    # Compensate for the error by subtracting it from the desired angle
-    compensated_shoulder = shoulder_angle - shoulder_error
-    compensated_elbow = elbow_angle - elbow_error
-    
-    # Clamp to valid servo range
-    compensated_shoulder = max(0, min(180, compensated_shoulder))
-    compensated_elbow = max(0, min(180, compensated_elbow))
-    
-    # Send to servos
-    set_servo_deg(pwm_shoulder, compensated_shoulder)
-    set_servo_deg(pwm_elbow, compensated_elbow)
-
-def send_uncompensated_angle(shoulder_angle, elbow_angle):
-    """
-    Send angles to servos without any compensation (for comparison)
-    
-    Parameters:
-        shoulder_angle: Desired shoulder angle in degrees
-        elbow_angle: Desired elbow angle in degrees
-    """
-    # Clamp to valid servo range
-    shoulder_angle = max(0, min(180, shoulder_angle))
-    elbow_angle = max(0, min(180, elbow_angle))
-    
-    # Send to servos
-    set_servo_deg(pwm_shoulder, shoulder_angle)
-    set_servo_deg(pwm_elbow, elbow_angle)
+    if calibration_table:
+        # Get interpolated errors for each servo
+        shoulder_error = interpolate_error(shoulder_angle, calibration_table['shoulder'])
+        elbow_error = interpolate_error(elbow_angle, calibration_table['elbow'])
+        
+        # Compensate for the error by subtracting it from the desired angle
+        compensated_shoulder = shoulder_angle - shoulder_error
+        compensated_elbow = elbow_angle - elbow_error
+        
+        # Clamp to valid servo range
+        compensated_shoulder = max(0, min(180, compensated_shoulder))
+        compensated_elbow = max(0, min(180, compensated_elbow))
+        
+        # Send to servos
+        set_servo_deg(pwm_shoulder, compensated_shoulder)
+        set_servo_deg(pwm_elbow, compensated_elbow)
+    else:
+        # Clamp to valid servo range
+        shoulder_angle = max(0, min(180, shoulder_angle))
+        elbow_angle = max(0, min(180, elbow_angle))
+        
+        # Send to servos
+        set_servo_deg(pwm_shoulder, shoulder_angle)
+        set_servo_deg(pwm_elbow, elbow_angle)
 
 def move_to(x, y, calibration_table=None):
     """
     Move the pen to position (x, y) in mm
-    
-    Parameters:
-        x, y: Target coordinates in mm
     """
-    servoA, servoB = inverse_kinematics(x, y)
+    servoA, servoB = inverse_kinematics(x, y) # Calculate servo angles
     
-    if calibration_table:
-        send_compensated_angle(calibration_table, servoA, servoB)
-    else:
-        send_uncompensated_angle(servoA, servoB)
+    send_angle(calibration_table, servoA, servoB) # Send angles to servos
     
     time.sleep_ms(50)
-
-def draw_circle(center_x, center_y, radius, num_points=36, calibration_table=None):
-    """
-    Draw a circle
-    
-    Parameters:
-        center_x, center_y: Center of circle in mm
-        radius: Radius of circle in mm
-        num_points: Number of points to use for the circle
-    """    
-    for i in range(num_points + 1):
-        angle = 2 * math.pi * i / num_points
-        x = center_x + radius * math.cos(angle)
-        y = center_y + radius * math.sin(angle)
-        move_to(x, y, calibration_table)
 
 def draw_square(calibration_table=None):
     """
     Draw a square
-    """ 
-    
+    """    
+
     # Define corners
     corners = [
-        (20, 20),  # bottom-left
-        (50, 20),  # bottom-right
-        (50, 50),  # top-right
-        (20, 50),  # top-left
-        (20, 20),  # back to start
+        (50, 50),  # bottom-left
+        (150, 50),  # bottom-right
+        (150, 150),  # top-right
+        (50, 150),  # top-left
+        (50, 50),  # back to start
     ]
     
     for x, y in corners:
         move_to(x, y, calibration_table)
-        time.sleep(1)
 
 def compare_calibration(jig_id):
     """
     Compare drawing results with and without calibration
-    
-    Parameters:
-        jig_id: The unique identifier for the test jig
     """
     # Load calibration data
     calibration_table = calibration_setup(jig_id)
-    
-    print(calibration_table)
-    # Define test shape parameters
-    # Position in the middle of the paper
-    
-    print("CALIBRATION COMPARISON TEST")
-    
-    # Test 1: Circle without calibration
-    print("\n--- Drawing circle WITHOUT calibration ---")
-    input("Type anything to start...")
-    draw_circle(70, 210, 30, num_points=36, calibration_table=None)
-        
-    # Test 2: Circle with calibration
-    print("\n--- Drawing circle WITH calibration ---")
-    input("Type anything to start...")
-    draw_circle(140, 210, 30, num_points=36, calibration_table=calibration_table)
-        
-    # Test 3: Square without calibration
-    print("\n--- Drawing square WITHOUT calibration ---")
-    input("Type anything to start...")
-    draw_square()
-    
-    # Test 4: Square with calibration
-    print("\n--- Drawing square WITH calibration ---")
-    input("Type anything to start...")
-    draw_square(calibration_table=calibration_table)
-    
-    print("Comparison test complete!")
 
+    # Test 1: Square without calibration
+    print("\n--- Drawing square WITHOUT calibration ---")
+    draw_square(calibration_table=None)
+    
+    time.sleep(1)
+    
+    # Test 2: Square with calibration
+    print("\n--- Drawing square WITH calibration ---")
+    draw_square(calibration_table=calibration_table)
 
 if __name__ == "__main__":    
     # Run comparison test for inputed jig_id
-    calibration_table = calibration_setup(1)
-
-    angle_shoulder, angle_elbow = inverse_kinematics(148.6,81.5)
-    print(angle_shoulder, angle_elbow)
-    x, y, x2, y2 = forward_kinematics(angle_shoulder, angle_elbow)
-    print(x,y,x2,y2)
-
-    # move_to(1, 1, None)
-    # time.sleep(2)
-    # move_to(215, 1, None)
-    # time.sleep(2)
-    # move_to(215, 279, None)
-    # time.sleep(2)
-    # move_to(1, 279, None)
-    #compare_calibration(input("Enter your test jig ID: ").strip())
+    compare_calibration(input("Enter your test jig ID: ").strip())
