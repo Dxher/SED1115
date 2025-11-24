@@ -4,10 +4,6 @@ import time
 # Constants
 ServoFreq = 50  # Hz
 
-# Robot arm dimensions (in mm)
-Lab = 155  # shoulder to elbow
-Lbc = 155  # elbow to pen
-
 # Shoulder base position (in mm)
 ShoulderX = -50
 ShoulderY = 139.5
@@ -92,21 +88,25 @@ def run_gcode(commands):
     """
     for cmd in commands:
         c = cmd["cmd"]
-        print(c)
+        
+        # Pen up
         if c == "M5":
             pen_up()
             time.sleep(0.5)
 
+        # Pen down
         elif c == "M3":
             pen_down()
             time.sleep(0.5)
 
+        # Move command
         elif c == "G1":
-            S = cmd["params"].get("S")
-            E = cmd["params"].get("E")
-            send_angle(S, E)
+            S = cmd["params"].get("S") # Shoulder angle
+            E = cmd["params"].get("E") # Elbow angle
+            send_angle(S, E) # Send angles to servos
             time.sleep(0.5)
 
+        # End of program
         elif c == "M18":
             print("End of program (M18).")
             break
@@ -116,22 +116,22 @@ def read_gcode(filename):
     Reads a G-code file and returns a list of commands
     """
     commands = []
-    with open(filename, "r") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
+    with open(filename, "r") as file:
+        for line in file:
+            line = line.strip() # Remove leading/trailing whitespace
+            if not line: # Skip empty lines
                 continue
 
-            parts = line.split()
-            cmd = parts[0]
-            params = {}
+            parts = line.split() # Split line into parts
+            cmd = parts[0] # First part is the command
+            params = {} 
 
-            for token in parts[1:]:
-                key = token[0]
-                value = float(token[1:])
-                params[key] = value
+            for token in parts[1:]:# Process parameters
+                key = token[0] # Parameter key (first character)
+                value = float(token[1:]) # Make value a float
+                params[key] = value # Store parameter
 
-            commands.append({"cmd": cmd, "params": params})
+            commands.append({"cmd": cmd, "params": params}) # Add command to list
 
     return commands
 
