@@ -1,4 +1,3 @@
-#done
 import time
 from machine import Pin, PWM, I2C
 from ads1x15 import ADS1015
@@ -133,12 +132,7 @@ def run_calibration():
     Main calibration routine. This routine takes an input to get the jig_id, calibrates the min and max volts for each servo,
     calibrate the shoulder, calibrates the elbow then saves the data into a file.
     """
-    # Get the jig ID from user
-    jig_id = input("Enter your test jig ID (e.g., 1, 2, A, B): ").strip()
-    if not jig_id:
-        jig_id = "default"
-    
-    print(f"\nStarting calibration for test jig: {jig_id}")
+
     
     # First, update voltage constraints
     print("\nStep 1: Determining voltage ranges...")
@@ -158,30 +152,7 @@ def run_calibration():
     time.sleep(1)
     shoulder_max_volts, elbow_max_volts = read_feedback_volts()
     print(f"At 180°: Shoulder={shoulder_max_volts:.3f}V, Elbow={elbow_max_volts:.3f}V")
-    
-    
-    # Second, calibrate the shoulder
-    print("\nStep 2: Calibrating shoulder servo...")
-    # Return elbow to neutral position during shoulder calibration
-    set_servo_deg(pwm_elbow, 90)
-    time.sleep(1.5)
-    shoulder_data = calibrate_servo("shoulder", pwm_shoulder)
-    
-    # Third, calibrate the elbow
-    print("\nStep 3: Calibrating elbow servo...")
-    # Return shoulder to neutral position during elbow calibration
-    set_servo_deg(pwm_shoulder, 90)
-    time.sleep(1)
-    elbow_data = calibrate_servo("elbow", pwm_elbow)
-    
-    # Save the calibration data
-    save_calibration_data(jig_id, shoulder_data, elbow_data)
-    
-    # Return servos to neutral position
-    set_servo_deg(pwm_shoulder, 90)
-    set_servo_deg(pwm_elbow, 90)
-    
-    print("\nCalibration complete!")
+
     
     """
     The following code block was used to manually test the voltage to angle conversion

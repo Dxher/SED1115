@@ -1,12 +1,11 @@
 import math
 
-# --- Geometry constants ---
-ShoulderX, ShoulderY = -50.0, 139.5       # Shoulder position (mm)
-Lab = 155.0                 # Shoulder-to-elbow (AB)
-Lbc = 155.0                 # Elbow-to-tip (BC)
+# constants 
+ShoulderX, ShoulderY = -50.0, 139.5 # Shoulder position (mm)
+Lab = 155.0 # Shoulder-to-elbow (AB)
+Lbc = 155.0 # Elbow-to-tip (BC)
 
-# --- Calibration constants (from the 4 premeasured angles) ---\
-
+# Calibration constants (from the 4 premeasured angles) 
 # Constants that calbrate geometric angles to servo angles
 SHOULDER_A = 1
 SHOULDER_B = 146

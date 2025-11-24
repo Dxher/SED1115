@@ -1,4 +1,3 @@
-#done
 import math
 
 # Robot arm dimensions (in mm)
