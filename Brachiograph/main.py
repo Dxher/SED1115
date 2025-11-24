@@ -154,11 +154,7 @@ def update_pen_state():
             # Optionally reduce servo power after movement completes
             # This helps prevent servo strain when pen is against paper
 
-def send_angle(shoulder_angle, elbow_angle):
-    # Clamp to valid servo range
-    shoulder_angle = max(0, min(180, shoulder_angle))
-    elbow_angle = max(0, min(180, elbow_angle))
-    
+def send_angle(shoulder_angle, elbow_angle):    
     # Send to servos
     set_servo_deg(pwm_shoulder, shoulder_angle)
     set_servo_deg(pwm_elbow, elbow_angle)
