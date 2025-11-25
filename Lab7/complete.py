@@ -116,24 +116,28 @@ def read_gcode(filename):
     Reads a G-code file and returns a list of commands
     """
     commands = []
-    with open(filename, "r") as file:
-        for line in file:
-            line = line.strip() # Remove leading/trailing whitespace
-            if not line: # Skip empty lines
-                continue
+    try:
+        with open(filename, "r") as file:
+            for line in file:
+                line = line.strip() # Remove leading/trailing whitespace
+                if not line: # Skip empty lines
+                    continue
 
-            parts = line.split() # Split line into parts
-            cmd = parts[0] # First part is the command
-            params = {} 
+                parts = line.split() # Split line into parts
+                cmd = parts[0] # First part is the command
+                params = {} 
 
-            for token in parts[1:]:# Process parameters
-                key = token[0] # Parameter key (first character)
-                value = float(token[1:]) # Make value a float
-                params[key] = value # Store parameter
+                for token in parts[1:]:# Process parameters
+                    key = token[0] # Parameter key (first character)
+                    value = float(token[1:]) # Make value a float
+                    params[key] = value # Store parameter
 
-            commands.append({"cmd": cmd, "params": params}) # Add command to list
+                commands.append({"cmd": cmd, "params": params}) # Add command to list
 
-    return commands
+        return commands
+    except OSError:
+        print("Error: Could not open file", filename)
+        return []
 
 def take_input(input):
     """
