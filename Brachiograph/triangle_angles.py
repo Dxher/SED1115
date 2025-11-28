@@ -50,6 +50,6 @@ def triangle_from_C(Cx, Cy):
 
     return Lac, angle_A_deg, angle_B_deg, angle_C_deg
 
-Lac, angle_A_deg, angle_B_deg, angle_C_deg = triangle_from_C(0,0)
+Lac, angle_A_deg, angle_B_deg, angle_C_deg = triangle_from_C(148.6,81.5)
 
 print(Lac, angle_A_deg, angle_B_deg, angle_C_deg)
